@@ -1,7 +1,9 @@
 // Three.js Stadium Environment for TILT KICK
-// Dual Engine: Full Day & Night Atmospheric Presentation,
-// High Readability Dynamic Lighting, Procedural Dual-Theme Turf,
-// 3D Goal with Swept Frame and Reactive Net, Floodlights, and Live Crowd.
+// 1. Dual Atmosphere Engine: Full Day & Night Presentation
+// 2. High-Readability Balanced Lighting Hierarchy (Ball, Keeper, Goal always prominent)
+// 3. Realistic Turf with Striping & FIFA White Markings
+// 4. Reactive 3D Goal Net with Physics Bulge & Micro-Oscillations
+// 5. Dynamic Camera Shake & Confetti Celebrations
 
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js';
 import { settingsManager } from '../utils/SettingsManager.js';
@@ -46,7 +48,7 @@ export class StadiumScene {
 
         // Camera animation
         this.baseCameraPos = new THREE.Vector3(0, 1.45, 7.8);
-        this.targetCameraLook = new THREE.Vector3(0, 1.3, -8.0);
+        this.targetCameraLook = new THREE.Vector3(0, 1.25, -8.0);
         this.cameraShakeIntensity = 0;
 
         this.init();
@@ -55,12 +57,12 @@ export class StadiumScene {
     init() {
         // 1. Scene
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x070c18);
-        this.scene.fog = new THREE.FogExp2(0x070c18, 0.018);
+        this.scene.background = new THREE.Color(0x0a1120);
+        this.scene.fog = new THREE.FogExp2(0x0a1120, 0.015);
 
         // 2. Camera
         const aspect = this.container.offsetWidth / this.container.offsetHeight;
-        this.camera = new THREE.PerspectiveCamera(52, aspect, 0.1, 120);
+        this.camera = new THREE.PerspectiveCamera(52, aspect, 0.1, 140);
         this.camera.position.copy(this.baseCameraPos);
         this.camera.lookAt(this.targetCameraLook);
 
@@ -71,7 +73,7 @@ export class StadiumScene {
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        this.renderer.toneMappingExposure = 1.18;
+        this.renderer.toneMappingExposure = 1.22;
         this.renderer.domElement.id = 'stadiumCanvas';
         this.container.appendChild(this.renderer.domElement);
 
@@ -106,37 +108,37 @@ export class StadiumScene {
     }
 
     setupLighting() {
-        // Ambient Light
-        this.ambientLight = new THREE.AmbientLight(0x283a52, 1.5);
+        // Ambient Light (Provides balanced fill so scene is never muddy black)
+        this.ambientLight = new THREE.AmbientLight(0x354a66, 1.6);
         this.scene.add(this.ambientLight);
 
-        // Hemisphere light
-        this.hemiLight = new THREE.HemisphereLight(0x486b94, 0x1a3320, 1.0);
+        // Hemisphere light (Sky / Grass ground reflection)
+        this.hemiLight = new THREE.HemisphereLight(0x5678a3, 0x1d3d22, 1.1);
         this.scene.add(this.hemiLight);
 
         // Sunlight Directional Light (Active in Day Mode)
-        this.sunLight = new THREE.DirectionalLight(0xfffaed, 2.6);
-        this.sunLight.position.set(-14, 26, 16);
-        this.sunLight.target.position.set(0, 0, -6);
+        this.sunLight = new THREE.DirectionalLight(0xfffaee, 3.0);
+        this.sunLight.position.set(-14, 28, 16);
+        this.sunLight.target.position.set(0, 1.2, -6);
         this.sunLight.castShadow = true;
         this.sunLight.shadow.mapSize.width = 2048;
         this.sunLight.shadow.mapSize.height = 2048;
         this.sunLight.shadow.camera.near = 5;
-        this.sunLight.shadow.camera.far = 60;
+        this.sunLight.shadow.camera.far = 65;
         this.sunLight.shadow.camera.left = -16;
         this.sunLight.shadow.camera.right = 16;
         this.sunLight.shadow.camera.top = 16;
         this.sunLight.shadow.camera.bottom = -16;
-        this.sunLight.shadow.bias = -0.0005;
+        this.sunLight.shadow.bias = -0.0004;
         this.scene.add(this.sunLight);
         this.scene.add(this.sunLight.target);
 
-        // Dedicated Goal Spotlight (Active in Night Mode)
-        this.goalSpot = new THREE.SpotLight(0xffffff, 2.4);
-        this.goalSpot.position.set(0, 11, -1);
+        // Dedicated Goal Spotlight (Highlights Goalkeeper, Goal Posts & Net)
+        this.goalSpot = new THREE.SpotLight(0xffffff, 2.8);
+        this.goalSpot.position.set(0, 12, 0);
         this.goalSpot.target.position.set(0, 1.2, -8.0);
-        this.goalSpot.angle = Math.PI / 4.4;
-        this.goalSpot.penumbra = 0.45;
+        this.goalSpot.angle = Math.PI / 4.2;
+        this.goalSpot.penumbra = 0.40;
         this.goalSpot.castShadow = true;
         this.goalSpot.shadow.mapSize.width = 1024;
         this.goalSpot.shadow.mapSize.height = 1024;
@@ -145,27 +147,27 @@ export class StadiumScene {
 
         // 4 Corner Stadium Floodlight Spotlights
         const addCornerSpot = (x, y, z, tx, ty, tz) => {
-            const spot = new THREE.SpotLight(0xf2f7ff, 2.6);
+            const spot = new THREE.SpotLight(0xf2f7ff, 2.8);
             spot.position.set(x, y, z);
             spot.target.position.set(tx, ty, tz);
-            spot.angle = Math.PI / 4.8;
+            spot.angle = Math.PI / 4.6;
             spot.penumbra = 0.45;
-            spot.decay = 1.4;
-            spot.distance = 75;
+            spot.decay = 1.3;
+            spot.distance = 80;
             spot.castShadow = true;
             spot.shadow.mapSize.width = 1024;
             spot.shadow.mapSize.height = 1024;
-            spot.shadow.bias = -0.0008;
+            spot.shadow.bias = -0.0006;
             this.scene.add(spot);
             this.scene.add(spot.target);
             this.cornerSpots.push(spot);
 
             // Volumetric beam cone
-            const beamGeo = new THREE.CylinderGeometry(0.25, 4.2, 18, 16, 1, true);
+            const beamGeo = new THREE.CylinderGeometry(0.25, 4.4, 18, 16, 1, true);
             const beamMat = new THREE.MeshBasicMaterial({
                 color: 0xcbe0ff,
                 transparent: true,
-                opacity: 0.07,
+                opacity: 0.08,
                 side: THREE.DoubleSide,
                 blending: THREE.AdditiveBlending,
                 depthWrite: false
@@ -185,7 +187,6 @@ export class StadiumScene {
     }
 
     createPitch() {
-        // Build both Day and Night turf textures
         const buildPitchCanvas = (isDay) => {
             const canvas = document.createElement('canvas');
             canvas.width = 1024;
@@ -193,24 +194,24 @@ export class StadiumScene {
             const ctx = canvas.getContext('2d');
 
             // Grass base tone
-            ctx.fillStyle = isDay ? '#2b7835' : '#184221';
+            ctx.fillStyle = isDay ? '#2b7835' : '#1a4624';
             ctx.fillRect(0, 0, 1024, 1024);
 
-            // Stripes
+            // Striping
             const stripeCount = 14;
             const stripeH = 1024 / stripeCount;
             for (let i = 0; i < stripeCount; i++) {
                 if (isDay) {
                     ctx.fillStyle = i % 2 === 0 ? '#328c3e' : '#287332';
                 } else {
-                    ctx.fillStyle = i % 2 === 0 ? '#1c4e27' : '#174020';
+                    ctx.fillStyle = i % 2 === 0 ? '#1e522a' : '#184221';
                 }
                 ctx.fillRect(0, i * stripeH, 1024, stripeH);
             }
 
-            // Turf noise
-            const noiseAlpha = isDay ? 0.03 : 0.04;
-            for (let i = 0; i < 30000; i++) {
+            // Fine turf texture grain
+            const noiseAlpha = isDay ? 0.025 : 0.035;
+            for (let i = 0; i < 28000; i++) {
                 const nx = Math.random() * 1024;
                 const ny = Math.random() * 1024;
                 ctx.fillStyle = `rgba(255, 255, 255, ${noiseAlpha * Math.random()})`;
@@ -257,8 +258,8 @@ export class StadiumScene {
         const pitchGeo = new THREE.PlaneGeometry(36, 42);
         const pitchMat = new THREE.MeshStandardMaterial({
             map: this.nightPitchTexture,
-            roughness: 0.76,
-            metalness: 0.05
+            roughness: 0.72,
+            metalness: 0.04
         });
 
         this.pitchMesh = new THREE.Mesh(pitchGeo, pitchMat);
@@ -279,8 +280,8 @@ export class StadiumScene {
 
         const postMaterial = new THREE.MeshStandardMaterial({
             color: 0xffffff,
-            metalness: 0.25,
-            roughness: 0.15
+            metalness: 0.30,
+            roughness: 0.12
         });
 
         // 1. Left Post
@@ -304,7 +305,7 @@ export class StadiumScene {
         this.goalGroup.add(crossbar);
 
         // 4. Stanchions
-        const stanchionMat = new THREE.MeshStandardMaterial({ color: 0x445060, roughness: 0.5 });
+        const stanchionMat = new THREE.MeshStandardMaterial({ color: 0x485668, roughness: 0.45 });
         const createStanchion = (x) => {
             const barGeo = new THREE.CylinderGeometry(0.045, 0.045, goalDepth * 1.3, 12);
             const bar = new THREE.Mesh(barGeo, stanchionMat);
@@ -339,7 +340,7 @@ export class StadiumScene {
             transparent: true,
             opacity: 0.92,
             side: THREE.DoubleSide,
-            roughness: 0.82,
+            roughness: 0.80,
             depthWrite: false
         });
 
@@ -391,7 +392,7 @@ export class StadiumScene {
             map: adTexture,
             emissive: 0x00e676,
             emissiveMap: adTexture,
-            emissiveIntensity: 0.40,
+            emissiveIntensity: 0.38,
             roughness: 0.35
         });
         this.adMesh = new THREE.Mesh(new THREE.PlaneGeometry(adWidth, adHeight), adMat);
@@ -399,7 +400,7 @@ export class StadiumScene {
         this.scene.add(this.adMesh);
 
         // Tiered Stadium Stands
-        const standMat = new THREE.MeshStandardMaterial({ color: 0x0c131f, roughness: 0.88 });
+        const standMat = new THREE.MeshStandardMaterial({ color: 0x0c131f, roughness: 0.85 });
         for (let i = 0; i < 4; i++) {
             const tierGeo = new THREE.BoxGeometry(36, 1.4, 2.8);
             const tierMesh = new THREE.Mesh(tierGeo, standMat);
@@ -522,7 +523,7 @@ export class StadiumScene {
     }
 
     // ============================================================
-    // DAY + NIGHT ATMOSPHERIC ENGINE
+    // DAY + NIGHT ATMOSPHERIC ENGINE (Phase 30)
     // ============================================================
     applyTheme(themeKey) {
         this.currentTheme = themeKey;
@@ -530,26 +531,26 @@ export class StadiumScene {
 
         if (themeKey === 'day') {
             // DAY THEME:
-            // High-noon clear stadium sky, crisp sunlight, vibrant green grass
-            this.scene.background.setHex(0x6ba4d9);
-            this.scene.fog.color.setHex(0x8cbbe6);
-            this.scene.fog.density = 0.007;
+            // High-noon clear stadium sky, bright sunlight, vibrant green pitch
+            this.scene.background.setHex(0x5a94cc);
+            this.scene.fog.color.setHex(0x7daee0);
+            this.scene.fog.density = 0.006;
 
             // Ambient & hemisphere
-            this.ambientLight.color.setHex(0xaad2f5);
-            this.ambientLight.intensity = 1.35;
+            this.ambientLight.color.setHex(0xb5d8fa);
+            this.ambientLight.intensity = 1.6;
 
             this.hemiLight.color.setHex(0x99ccff);
             this.hemiLight.groundColor.setHex(0x386d3e);
-            this.hemiLight.intensity = 1.15;
+            this.hemiLight.intensity = 1.2;
 
             // Sun directional light
             this.sunLight.visible = true;
-            this.sunLight.intensity = 2.8;
+            this.sunLight.intensity = 3.2;
 
-            // Goal spot & floodlights dimmed
-            this.goalSpot.intensity = 0.6;
-            this.cornerSpots.forEach(s => { s.intensity = 0.5; });
+            // Goal spot & floodlights dimmed for daylight
+            this.goalSpot.intensity = 0.8;
+            this.cornerSpots.forEach(s => { s.intensity = 0.6; });
             this.beamMeshes.forEach(b => { b.visible = false; });
 
             // Swap to Day pitch
@@ -564,28 +565,28 @@ export class StadiumScene {
             });
 
             if (this.flashParticles) this.flashParticles.visible = false;
-            this.renderer.toneMappingExposure = 1.12;
+            this.renderer.toneMappingExposure = 1.15;
         } else {
             // NIGHT THEME:
-            // Champions League floodlit night, deep navy sky, beam cones, goal spotlight
-            this.scene.background.setHex(0x070c18);
-            this.scene.fog.color.setHex(0x070c18);
-            this.scene.fog.density = 0.018;
+            // Champions League floodlit night, deep navy sky, crisp beam cones, goal spotlight
+            this.scene.background.setHex(0x0a1120);
+            this.scene.fog.color.setHex(0x0a1120);
+            this.scene.fog.density = 0.015;
 
-            this.ambientLight.color.setHex(0x24344d);
-            this.ambientLight.intensity = 1.45;
+            this.ambientLight.color.setHex(0x354a66);
+            this.ambientLight.intensity = 1.6;
 
-            this.hemiLight.color.setHex(0x3a567a);
-            this.hemiLight.groundColor.setHex(0x15291b);
-            this.hemiLight.intensity = 0.95;
+            this.hemiLight.color.setHex(0x5678a3);
+            this.hemiLight.groundColor.setHex(0x1d3d22);
+            this.hemiLight.intensity = 1.1;
 
             // Sun light disabled
             this.sunLight.visible = false;
             this.sunLight.intensity = 0;
 
-            // Goal spot & floodlights in full glory
-            this.goalSpot.intensity = 2.4;
-            this.cornerSpots.forEach(s => { s.intensity = 2.7; });
+            // Goal spot & floodlights in full brilliance
+            this.goalSpot.intensity = 2.8;
+            this.cornerSpots.forEach(s => { s.intensity = 2.8; });
             this.beamMeshes.forEach(b => { b.visible = true; });
 
             // Swap to Night pitch
@@ -599,7 +600,7 @@ export class StadiumScene {
             });
 
             if (this.flashParticles) this.flashParticles.visible = true;
-            this.renderer.toneMappingExposure = 1.20;
+            this.renderer.toneMappingExposure = 1.22;
         }
 
         // Apply theme attribute to DOM for unified broadcast UI styling

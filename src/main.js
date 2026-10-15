@@ -119,13 +119,8 @@ class TiltKickApp {
         };
 
         this.uiManager.onCalRetryCameraClicked = async () => {
-            const ok = await this.inputManager.restartCamera();
-            if (ok) {
-                this.uiManager.hideCameraError();
-                this.gameManager.recalibrate();
-            } else {
-                this.uiManager.showCameraError(this.inputManager.cameraError);
-            }
+            this.uiManager.hideCameraError();
+            await this.gameManager.beginCalibration();
         };
 
         this.uiManager.onCalFallbackKeyClicked = () => {
@@ -183,24 +178,18 @@ class TiltKickApp {
         const statusText = this.inputManager.getStatusText();
         this.uiManager.updateTrackingBadge(statusText, isTracking, isCameraOn);
 
-        if (this.gameManager.state === 'CALIBRATION') {
-            const posStatus = this.inputManager.getPositionStatus();
-            const progress = this.inputManager.getCalibrationProgress();
-            this.uiManager.updateCalibrationFeedback(posStatus, isTracking, progress, this.inputManager.mode);
-        }
-
-        // 3. Update Real-time Debug Stats
-        if (this.inputManager.mode === 'head') {
-            const stats = this.inputManager.headTracker.getDebugStats();
-            this.uiManager.updateDebugStats(stats);
-        }
+        // 3. Update Real-time Vision Telemetry (Phase 18 & 41)
+        const telemetry = this.inputManager.getTelemetry();
+        this.uiManager.updateDebugStats(telemetry);
 
         // 4. Render 3D Scene
         this.stadiumScene.render();
     }
 }
 
-// Start application when DOM is loaded
-window.addEventListener('DOMContentLoaded', () => {
+// Start application when DOM is ready
+if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', () => new TiltKickApp());
+} else {
     new TiltKickApp();
-});
+}

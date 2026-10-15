@@ -2406,19 +2406,22 @@ input:checked + .slider:before {
 
 .debug-overlay {
     position: fixed;
-    top: 70px;
+    top: 65px;
     right: 20px;
-    width: 250px;
-    background: rgba(8, 14, 24, 0.92);
-    border: 1px solid rgba(0, 230, 118, 0.3);
+    width: 290px;
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+    background: rgba(6, 12, 22, 0.94);
+    border: 1px solid rgba(0, 230, 118, 0.35);
     border-radius: 12px;
-    padding: 14px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
-    font-family: 'Courier New', Courier, monospace;
-    font-size: 0.76rem;
+    padding: 12px 14px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+    font-family: 'SF Mono', Monaco, Menlo, Consolas, monospace;
+    font-size: 0.72rem;
     color: #e0e6ed;
     z-index: 999;
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(12px);
+    pointer-events: auto;
 }
 
 .debug-title {

@@ -63,20 +63,36 @@
 
     <!-- Tracking Debug Overlay (Toggle with ` backtick) -->
     <div id="debug-overlay" class="debug-overlay" style="display: none;">
-        <div class="debug-title">TRACKING TELEMETRY (` to close)</div>
-        <div class="debug-row"><span>Player:</span><strong id="dbg-player-id">PLAYER 1</strong></div>
-        <div class="debug-row"><span>Faces:</span><strong id="dbg-face-count">1 (0 IGNORED)</strong></div>
-        <div class="debug-row"><span>ID Match:</span><strong id="dbg-match-score">100%</strong></div>
+        <div class="debug-title">DEVELOPMENT VISION TELEMETRY (` to toggle)</div>
+        <div class="debug-row"><span>Camera State:</span><strong id="dbg-cam-status">OFF</strong></div>
+        <div class="debug-row"><span>Diag Stage:</span><strong id="dbg-diag-stage" style="color: #64b5f6;">CAMERA_NOT_READY</strong></div>
+        <div class="debug-row"><span>Active Video:</span><strong id="dbg-video-elem">—</strong></div>
+        <div class="debug-row"><span>Hardware Res:</span><strong id="dbg-cam-res">—</strong></div>
+        <div class="debug-row"><span>Frame Age:</span><strong id="dbg-frame-age">0 ms</strong></div>
+        <div class="debug-row"><span>Model State:</span><strong id="dbg-model-state">NOT READY</strong></div>
+        <div class="debug-row"><span>Render FPS:</span><strong id="dbg-render-fps">60 FPS</strong></div>
+        <div class="debug-row"><span>Inference FPS:</span><strong id="dbg-inference-fps">0 FPS</strong></div>
+        <div class="debug-row"><span>Inference Dur:</span><strong id="dbg-inference-dur">0 ms</strong></div>
+        <div class="debug-row"><span>Lighting:</span><strong id="dbg-lighting">NORMAL</strong></div>
+        <div class="debug-row"><span>Target Player:</span><strong id="dbg-player-id">SEARCHING</strong></div>
+        <div class="debug-row"><span>Detected Faces:</span><strong id="dbg-face-count">0 (0 CROWD)</strong></div>
+        <div class="debug-row"><span>Face Conf:</span><strong id="dbg-face-conf">0%</strong></div>
+        <div class="debug-row"><span>Landmarks:</span><strong id="dbg-landmark-valid">INVALID</strong></div>
+        <div class="debug-row"><span>Accepted Samples:</span><strong id="dbg-accepted-samples">0 / 24</strong></div>
+        <div class="debug-row"><span>Rejected Samples:</span><strong id="dbg-rejected-samples">0</strong></div>
+        <div class="debug-row"><span>Last Rejection:</span><strong id="dbg-rejection-reason" style="color: #ffd700;">NONE</strong></div>
         <div class="debug-row"><span>Raw Roll:</span><strong id="dbg-raw">0.0°</strong></div>
-        <div class="debug-row"><span>Smoothed:</span><strong id="dbg-smoothed">0.0°</strong></div>
-        <div class="debug-row"><span>Neutral:</span><strong id="dbg-neutral">0.0°</strong></div>
-        <div class="debug-row"><span>Pitch:</span><strong id="dbg-pitch">0.0</strong></div>
-        <div class="debug-row"><span>Pitch Vel:</span><strong id="dbg-pitchvel">0.0</strong></div>
-        <div class="debug-row"><span>Aim:</span><strong id="dbg-aim">0.00</strong></div>
-        <div class="debug-row"><span>Locked Aim:</span><strong id="dbg-locked-aim">0.00</strong></div>
-        <div class="debug-row"><span>Power:</span><strong id="dbg-power">0%</strong></div>
-        <div class="debug-row"><span>Status:</span><strong id="dbg-status">OK</strong></div>
-        <div class="debug-row"><span>FPS:</span><strong id="dbg-fps">60 FPS</strong></div>
+        <div class="debug-row"><span>Neutral Roll:</span><strong id="dbg-neutral">0.0°</strong></div>
+        <div class="debug-row"><span>Relative Roll:</span><strong id="dbg-smoothed">0.0°</strong></div>
+        <div class="debug-row"><span>Raw Pitch / Vel:</span><strong id="dbg-pitch">0.0 / 0.0</strong></div>
+        <div class="debug-row"><span>Neutral Pitch:</span><strong id="dbg-neutral-pitch">0.0°</strong></div>
+        <div class="debug-row"><span>Relative Pitch:</span><strong id="dbg-relative-pitch">0.0°</strong></div>
+        <div class="debug-row"><span>Aim Output:</span><strong id="dbg-aim">CENTER (0.00)</strong></div>
+        <div class="debug-row"><span>Power Charge:</span><strong id="dbg-power">0%</strong></div>
+        <div class="debug-row"><span>Nod Detector:</span><strong id="dbg-nod-state">READY</strong></div>
+        <div class="debug-row"><span>Track State:</span><strong id="dbg-status">NO FACE</strong></div>
+        <div class="debug-row"><span>Calibration:</span><strong id="dbg-cal-state">IDLE</strong></div>
+        <div class="debug-row"><span>Last Error:</span><strong id="dbg-error" style="color: #ff5252;">NONE</strong></div>
     </div>
 
     <!-- ==================== UI SCREENS ==================== -->
@@ -478,7 +494,7 @@
             <div class="cal-step-indicator" id="cal-step-indicator">
                 <div class="step-item active" id="step-ind-1">
                     <span class="step-number">1</span>
-                    <span class="step-name">IDENTITY</span>
+                    <span class="step-name">FACE SETUP</span>
                 </div>
                 <div class="step-line" id="step-line-1"></div>
                 <div class="step-item" id="step-ind-2">

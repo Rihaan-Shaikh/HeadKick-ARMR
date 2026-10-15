@@ -1,7 +1,10 @@
 // Master Game Manager for TILT KICK
-// Implements full state machine for Solo, Practice, and 2-Player Pass-and-Play modes,
-// pause system with timer freezing, authoritative locked-aim shot execution,
-// continuous swept goalkeeper collision detection, and stadium fanfare sequencing.
+// 1. Authoritative State System: Solo, Practice, 2-Player Pass-and-Play
+// 2. Strict Real-World Outcome Evaluation (Zero Pre-Determined Outcome Dice Rolls)
+// 3. Continuous Swept Goalkeeper Trajectory Collision Interception
+// 4. Physical Ball-In-Net Goal Detection with 3D Dynamic Net Bulge & Ripple
+// 5. Woodwork Collision (Post & Crossbar) with Metallic Rebounds & Camera Micro-Shake
+// 6. Decoupled Center Nod Kick Guarantee (Power > 0 Not Required)
 
 import { soundEngine } from '../audio/SoundEngine.js';
 import { ShotEngine } from './ShotEngine.js';
@@ -48,7 +51,7 @@ export class GameManager {
         this.player2Goals = 0;
         this.player1Shots = 0;
         this.player2Shots = 0;
-        this.player1Results = []; // ['GOAL', 'SAVED', 'MISS'...]
+        this.player1Results = [];
         this.player2Results = [];
 
         // Practice Mode State
@@ -57,10 +60,11 @@ export class GameManager {
         // Active Shot State
         this.currentAim = 0;
         this.currentPower = 0;
-        this.activeShotResult = null;
+        this.activeShotMeta = null;
+        this.activeShotOutcome = null; // Determined physically in flight!
         this.shotFlightTimer = 0;
+        this.shotOutcomeResolved = false;
         this.lastSoundChargeTime = 0;
-        this.collisionChecked = false;
 
         // Sequence Timers
         this.countdownValue = 3;
@@ -170,7 +174,9 @@ export class GameManager {
         this.inputManager.resetKickTrigger();
         this.currentAim = 0;
         this.currentPower = 0;
-        this.collisionChecked = false;
+        this.activeShotMeta = null;
+        this.activeShotOutcome = null;
+        this.shotOutcomeResolved = false;
 
         if (this.gameMode === 'practice') {
             this.uiManager.showPracticeHUD();
@@ -182,52 +188,64 @@ export class GameManager {
         soundEngine.playWhistle();
     }
 
+    // ============================================================
+    // PHYSICAL SHOT EXECUTION & LAUNCH (Phase 23 & 25)
+    // ============================================================
     executeKick(aim, power) {
         if (this.state !== 'AIMING' && this.state !== 'CHARGING') return;
 
         this.state = 'SHOT_IN_FLIGHT';
-        this.inputManager.lockInput(true); // Lock input during ball flight
+        this.inputManager.lockInput(true); // Lock input during flight
         this.shotsTaken++;
-        this.collisionChecked = false;
+        this.shotOutcomeResolved = false;
+        this.activeShotOutcome = null;
 
         // Authoritative locked aim (guarantees nod motion does not pull reticle off-target)
         const authoritativeAim = this.inputManager.getLockedKickAim(aim);
         this.currentAim = authoritativeAim;
-        // Decoupled kick guarantee: minimum 30% shot power even on immediate center nod without charging
-        this.currentPower = Math.max(0.30, power);
+        // Decoupled kick guarantee: minimum 35% shot power even on immediate center nod without charging
+        this.currentPower = Math.max(0.35, power);
 
         if (this.gameMode === '2player') {
             if (this.currentPlayer === 1) this.player1Shots++;
             else this.player2Shots++;
         }
 
-        // Calculate continuous target and evaluate against goalkeeper
+        // Calculate continuous 3D target coordinates in world space
         const target = this.shotEngine.calculateTarget(this.currentAim, this.currentPower);
-        const evaluation = this.shotEngine.evaluateShot(target.x, target.y, target.effectivePower);
-        this.activeShotResult = evaluation;
+        const meta = this.shotEngine.getShotMetadata(target.x, target.y, target.effectivePower);
+        this.activeShotMeta = meta;
 
         // Audio & Visual Feedback
         soundEngine.playKick(this.currentPower);
         this.uiManager.setStatusText('KICK! — BALL IN FLIGHT');
-        this.uiManager.showShotQuality(evaluation.quality);
+        this.uiManager.showShotQuality(meta.quality);
 
-        // Launch ball
-        this.ball.shoot(evaluation.targetX, evaluation.targetY, this.currentPower);
+        // Launch ball along physical ballistic trajectory
+        this.ball.shoot(target.x, target.y, this.currentPower);
 
-        // Goalkeeper reaction with difficulty-based delay
-        this.goalkeeper.reactToShot(
-            evaluation.targetX,
-            evaluation.targetY,
-            evaluation.willSave,
-            evaluation.reactionDelay
-        );
+        // Goalkeeper observes shot and leaps with difficulty-tuned uncertainty
+        const keeperEnabled = (this.gameMode !== 'practice' || this.practiceKeeper);
+        if (keeperEnabled) {
+            const difficulty = settingsManager.get('keeperDifficulty') || 'medium';
+            this.goalkeeper.reactToShot(target.x, target.y, difficulty);
+        }
 
-        this.shotFlightTimer = this.ball.flightDuration + 0.18;
+        this.shotFlightTimer = this.ball.flightDuration + 0.35;
     }
 
+    // ============================================================
+    // PHYSICAL OUTCOME RESOLUTION (Phase 23 & 26)
+    // ============================================================
+    // Visual outcome and logical outcome are guaranteed 100% IDENTICAL
     resolveShotOutcome() {
         this.state = 'RESULT_BANNER';
-        const res = this.activeShotResult;
+        const res = this.activeShotOutcome || {
+            result: 'MISS',
+            title: 'OFF TARGET!',
+            subtitle: 'SHOT WIDE',
+            points: 0
+        };
 
         if (res.result === 'GOAL' || res.result === 'PERFECT') {
             this.goals++;
@@ -254,7 +272,7 @@ export class GameManager {
             }
 
             soundEngine.playGoal();
-            this.stadiumScene.triggerGoalCelebration(res.targetX, res.targetY);
+            this.stadiumScene.triggerGoalCelebration(res.targetX || 0, res.targetY || 1.2);
         } else if (res.result === 'SAVED') {
             this.saves++;
             this.currentStreak = 0;
@@ -262,12 +280,8 @@ export class GameManager {
                 if (this.currentPlayer === 1) this.player1Results.push('SAVED');
                 else this.player2Results.push('SAVED');
             }
-            if (!this.collisionChecked) {
-                soundEngine.playSave();
-                this.ball.deflect();
-            }
         } else {
-            // MISS
+            // MISS (Woodwork or Wide)
             this.misses++;
             this.currentStreak = 0;
             if (this.gameMode === '2player') {
@@ -277,7 +291,6 @@ export class GameManager {
             if (res.subType === 'CROSSBAR' || res.subType === 'POST') {
                 soundEngine.playPost();
                 this.stadiumScene.triggerPostClang();
-                this.ball.reboundPost(res.subType === 'CROSSBAR');
             } else {
                 soundEngine.playMiss();
             }
@@ -301,7 +314,7 @@ export class GameManager {
             if (this.state === 'RESULT_BANNER') {
                 this.advanceTurn();
             }
-        }, 2100);
+        }, 2200);
     }
 
     advanceTurn() {
@@ -316,7 +329,6 @@ export class GameManager {
         } else if (this.gameMode === '2player') {
             if (this.timeRemaining <= 0) {
                 if (this.currentPlayer === 1) {
-                    // Switch to Player 2
                     this.currentPlayer = 2;
                     this.timeRemaining = this.matchLengthSec;
                     this.state = 'PLAYER_SWITCH';
@@ -324,10 +336,9 @@ export class GameManager {
                     this.uiManager.showPlayerSwitchModal(2, this.player1Score, () => {
                         this.inputManager.resetPlayerSession();
                         this.inputManager.pauseProcessing(false);
-                        this.beginCalibration(); // Fresh calibration for Player 2
+                        this.beginCalibration();
                     });
                 } else {
-                    // Player 2 full time: Game over
                     this.endGame();
                 }
             } else {
@@ -353,7 +364,6 @@ export class GameManager {
         this.inputManager.pauseProcessing(true);
         this.uiManager.showPauseModal();
 
-        // Privacy auto-stop if paused > 60s
         if (this.pauseSafetyTimer) clearTimeout(this.pauseSafetyTimer);
         this.pauseSafetyTimer = setTimeout(() => {
             if (this.state === 'PAUSED') {
@@ -406,7 +416,7 @@ export class GameManager {
         }
         this.state = 'GAME_OVER';
         this.inputManager.lockInput(true);
-        this.inputManager.stopCamera(); // CAMERA = OFF immediately upon match end
+        this.inputManager.stopCamera();
         soundEngine.playWhistle();
 
         if (this.gameMode === 'solo') {
@@ -527,7 +537,7 @@ export class GameManager {
             }
 
             // Goalkeeper anticipates when power builds
-            if (power > 0.22) {
+            if (power > 0.20) {
                 this.goalkeeper.anticipate();
             }
 
@@ -539,20 +549,110 @@ export class GameManager {
             this.uiManager.updateAimReticle(aim, power);
             this.uiManager.updatePowerMeter(power);
 
+            // Execute Kick upon Deliberate Nod Trigger
             if (this.inputManager.isKickTriggered()) {
                 this.executeKick(aim, power);
                 this.inputManager.resetKickTrigger();
             }
         } else if (this.state === 'SHOT_IN_FLIGHT') {
-            // CONTINUOUS SWEPT TRAJECTORY KEEPER INTERCEPT CHECK (Phase 13)
-            if (!this.collisionChecked && this.activeShotResult) {
-                const collision = this.goalkeeper.checkBallCollision(this.ball.position, this.ball.radius);
+            const keeperEnabled = (this.gameMode !== 'practice' || this.practiceKeeper);
+
+            // 1. CONTINUOUS SWEPT TRAJECTORY KEEPER INTERCEPTION (Phase 23 & 24)
+            if (!this.shotOutcomeResolved && keeperEnabled) {
+                const collision = this.goalkeeper.checkSweptBallCollision(
+                    this.ball.prevPosition,
+                    this.ball.position,
+                    this.ball.radius
+                );
+
                 if (collision && collision.hit) {
-                    this.collisionChecked = true;
-                    if (this.activeShotResult.willSave) {
-                        this.ball.deflect();
-                        soundEngine.playSave();
+                    this.shotOutcomeResolved = true;
+                    // PHYSICAL DEFLECTION: ball shoots away in world space!
+                    this.ball.deflect(collision);
+                    soundEngine.playSave();
+
+                    this.activeShotOutcome = {
+                        result: 'SAVED',
+                        subType: 'KEEPER_SAVE',
+                        title: 'SAVED!',
+                        subtitle: collision.part === 'GLOVE' ? 'BRILLIANT GLOVE PARRY!' : 'BLOCKED BY THE KEEPER!',
+                        points: 0
+                    };
+                }
+            }
+
+            // 2. GOAL LINE & NET ENTRY INTERACTION (Phase 26)
+            // Goal line is at Z = -8.0; Goal width is ±3.66m; Goal height is 2.44m
+            if (!this.shotOutcomeResolved && this.ball.position.z <= -7.95) {
+                this.shotOutcomeResolved = true;
+
+                const bx = this.ball.position.x;
+                const by = this.ball.position.y;
+                const absX = Math.abs(bx);
+
+                const isPost = (absX >= 3.52 && absX <= 3.82 && by <= 2.50);
+                const isCrossbar = (by >= 2.36 && by <= 2.62 && absX <= 3.75);
+                const isInsideGoal = (absX < 3.52 && by < 2.36 && by > 0.05);
+
+                if (isCrossbar) {
+                    this.ball.reboundPost(true);
+                    this.activeShotOutcome = {
+                        result: 'MISS',
+                        subType: 'CROSSBAR',
+                        title: 'OFF THE CROSSBAR!',
+                        subtitle: 'RATTLED THE WOODWORK!',
+                        points: 0
+                    };
+                } else if (isPost) {
+                    this.ball.reboundPost(false);
+                    this.activeShotOutcome = {
+                        result: 'MISS',
+                        subType: 'POST',
+                        title: 'OFF THE POST!',
+                        subtitle: 'DENIED BY THE UPRIGHT!',
+                        points: 0
+                    };
+                } else if (isInsideGoal) {
+                    // GOAL SCORED!
+                    const zone = this.activeShotMeta?.zone || 'CENTER';
+                    let points = 100;
+                    let title = 'GOAL!';
+                    let subtitle = 'CLINICAL PENALTY!';
+                    let resType = 'GOAL';
+
+                    if (zone === 'TOP_LEFT_90' || zone === 'TOP_RIGHT_90') {
+                        points = 150;
+                        title = 'PERFECT!';
+                        subtitle = 'UPPER 90 — UNSTOPPABLE!';
+                        resType = 'PERFECT';
+                    } else if (zone === 'BOTTOM_LEFT' || zone === 'BOTTOM_RIGHT') {
+                        points = 120;
+                        title = 'GOAL!';
+                        subtitle = 'DRILLED INTO THE BOTTOM CORNER!';
+                    } else if (this.activeShotMeta?.grade === 'GREAT') {
+                        points = 110;
+                        title = 'GOAL!';
+                        subtitle = 'THUMPING FINISH!';
                     }
+
+                    this.activeShotOutcome = {
+                        result: resType,
+                        subType: zone,
+                        title,
+                        subtitle,
+                        points,
+                        targetX: bx,
+                        targetY: by
+                    };
+                } else {
+                    // Off Target Miss
+                    this.activeShotOutcome = {
+                        result: 'MISS',
+                        subType: 'WIDE',
+                        title: 'OFF TARGET!',
+                        subtitle: 'FIRED WIDE OF THE POSTS',
+                        points: 0
+                    };
                 }
             }
 

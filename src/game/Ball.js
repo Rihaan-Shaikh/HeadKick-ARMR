@@ -1,6 +1,7 @@
 // Realistic 3D Football Ballistics for TILT KICK
-// 32-Panel Procedural Texture, Dynamic Contact Shadow,
-// Parabolic Ballistics, Magnus Curve Spin, Net Bulge Interaction, and Keeper Deflection.
+// 32-Panel Match Ball Texture, Dynamic Turf Contact Shadow,
+// Parabolic Gravity Ballistics, Magnus Curve Spin, Net Bulge Interaction,
+// and Physical Articulated Goalkeeper Deflections.
 
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js';
 
@@ -17,6 +18,7 @@ export class Ball {
 
         // Physics State
         this.position = this.penaltySpot.clone();
+        this.prevPosition = this.penaltySpot.clone(); // Crucial for continuous swept collision
         this.velocity = new THREE.Vector3(0, 0, 0);
         this.angularVelocity = new THREE.Vector3(0, 0, 0);
         this.isShotActive = false;
@@ -41,7 +43,7 @@ export class Ball {
         ctx.fillStyle = '#f8f9fa';
         ctx.fillRect(0, 0, 512, 512);
 
-        // Bold black pentagons with gold accents
+        // Bold black pentagons with gold athletic accents
         ctx.fillStyle = '#10141d';
         ctx.strokeStyle = '#d4af37'; // Gold trim
         ctx.lineWidth = 3;
@@ -136,6 +138,7 @@ export class Ball {
         this.isShotActive = false;
         this.isSettled = true;
         this.position.copy(this.penaltySpot);
+        this.prevPosition.copy(this.penaltySpot);
         this.velocity.set(0, 0, 0);
         this.angularVelocity.set(0, 0, 0);
         this.mesh.position.copy(this.position);
@@ -155,6 +158,7 @@ export class Ball {
         this.isSettled = false;
         this.flightElapsed = 0;
         this.shotPower = power;
+        this.prevPosition.copy(this.position);
 
         // Speed scaled strictly by power: 18m/s (driven) to 34m/s (missile)
         const speed = 18 + power * 16;
@@ -189,6 +193,7 @@ export class Ball {
         if (!this.isShotActive && this.isSettled) return;
 
         this.flightElapsed += delta;
+        this.prevPosition.copy(this.position);
 
         // Aerodynamic gravity
         this.velocity.y -= 9.8 * delta;
@@ -253,17 +258,36 @@ export class Ball {
         }
     }
 
-    deflect(keeperNormal = null) {
-        // Physical keeper save deflection
-        this.velocity.z = -this.velocity.z * 0.42;
-        this.velocity.x += (Math.random() - 0.5) * 8.5;
-        this.velocity.y = 3.6 + Math.random() * 2.8;
-        this.angularVelocity.multiplyScalar(-1.4);
+    deflect(contactInfo = null) {
+        // Physical Goalkeeper Save Deflection (Phase 23 & 24)
+        if (contactInfo && contactInfo.part === 'GLOVE') {
+            // Glove punch / fingertip parry: explosive redirection
+            this.velocity.z = -this.velocity.z * 0.45;
+            this.velocity.x += (contactInfo.normal?.x || (Math.random() - 0.5)) * 9.5;
+            this.velocity.y = 4.8 + Math.random() * 2.8;
+        } else if (contactInfo && contactInfo.part === 'TORSO') {
+            // Torso block: rebounds forward / down
+            this.velocity.z = Math.abs(this.velocity.z) * 0.38; // bounces outward
+            this.velocity.x += (Math.random() - 0.5) * 4.5;
+            this.velocity.y = 2.2 + Math.random() * 1.5;
+        } else if (contactInfo && contactInfo.part === 'LEG') {
+            // Leg deflection
+            this.velocity.z = Math.abs(this.velocity.z) * 0.35;
+            this.velocity.x += (contactInfo.normal?.x || (Math.random() - 0.5)) * 7.0;
+            this.velocity.y = 1.8 + Math.random() * 1.2;
+        } else {
+            // Generic deflection
+            this.velocity.z = -this.velocity.z * 0.42;
+            this.velocity.x += (Math.random() - 0.5) * 8.5;
+            this.velocity.y = 3.6 + Math.random() * 2.8;
+        }
+
+        this.angularVelocity.multiplyScalar(-1.5);
         if (this.trailLine) this.trailLine.material.opacity = 0.0;
 
-        // Impact squash
-        this.mesh.scale.set(0.88, 1.22, 0.88);
-        setTimeout(() => { if (this.mesh) this.mesh.scale.set(1, 1, 1); }, 65);
+        // Visual Impact squash & stretch
+        this.mesh.scale.set(0.85, 1.20, 0.85);
+        setTimeout(() => { if (this.mesh) this.mesh.scale.set(1, 1, 1); }, 75);
     }
 
     reboundPost(isCrossbar = false) {

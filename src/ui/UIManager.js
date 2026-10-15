@@ -728,7 +728,7 @@ export class UIManager {
         if (this.dom.btnCalReady) this.dom.btnCalReady.style.display = 'none';
         if (this.dom.btnCalBack) this.dom.btnCalBack.style.display = 'inline-block';
 
-        if (inputManager && !inputManager.cameraAllowed) {
+        if (inputManager && (inputManager.cameraState === 'CAMERA_DENIED' || inputManager.cameraState === 'CAMERA_UNAVAILABLE')) {
             this.showCameraError(inputManager.cameraError);
         } else if (this.dom.calCameraFallback) {
             this.dom.calCameraFallback.style.display = 'none';
@@ -736,11 +736,11 @@ export class UIManager {
 
         if (this.dom.calStatusBadge && this.dom.calStatusText) {
             this.dom.calStatusBadge.className = 'cal-status-badge';
-            if (this.dom.calStatusIcon) this.dom.calStatusIcon.innerText = '○';
-            this.dom.calStatusText.innerText = 'FINDING FACE...';
+            if (this.dom.calStatusIcon) this.dom.calStatusIcon.innerText = '⏳';
+            this.dom.calStatusText.innerText = 'REQUESTING CAMERA';
         }
         if (this.dom.calSubtext) {
-            this.dom.calSubtext.innerText = 'Center your face inside the framing guide';
+            this.dom.calSubtext.innerText = 'Please allow camera access in your browser prompt...';
         }
         if (this.dom.calStepCount) {
             this.dom.calStepCount.innerText = '';
@@ -782,10 +782,84 @@ export class UIManager {
         let guideModifier = 'aligned';
         let hint = 'Hold still to complete setup';
 
+        // 1. Hardware, Network & Model Lifecycle Failures and Startup Progression
+        switch (positionStatus) {
+            case 'CAMERA_REQUESTING':
+                this.dom.calStatusText.innerText = 'REQUESTING CAMERA';
+                if (this.dom.calStatusIcon) this.dom.calStatusIcon.innerText = '⏳';
+                this.dom.calStatusBadge.className = 'cal-status-badge';
+                if (this.dom.calSubtext) this.dom.calSubtext.innerText = 'Please allow camera access in your browser prompt.';
+                this.updateStepIndicator(0);
+                return;
+            case 'CAMERA_DENIED':
+                this.dom.calStatusText.innerText = 'CAMERA ACCESS DENIED';
+                if (this.dom.calStatusIcon) this.dom.calStatusIcon.innerText = '🚫';
+                this.dom.calStatusBadge.className = 'cal-status-badge error';
+                if (this.dom.calSubtext) this.dom.calSubtext.innerText = 'Camera access was blocked. Enable camera permissions in address bar.';
+                this.showCameraError('NotAllowedError');
+                this.updateStepIndicator(0);
+                return;
+            case 'CAMERA_UNAVAILABLE':
+            case 'CAMERA_OFF':
+                this.dom.calStatusText.innerText = 'CAMERA UNAVAILABLE';
+                if (this.dom.calStatusIcon) this.dom.calStatusIcon.innerText = '📷';
+                this.dom.calStatusBadge.className = 'cal-status-badge error';
+                if (this.dom.calSubtext) this.dom.calSubtext.innerText = 'No camera device found or device busy. Connect camera or use keyboard.';
+                this.showCameraError('NotFoundError');
+                this.updateStepIndicator(0);
+                return;
+            case 'CAMERA_LOST':
+                this.dom.calStatusText.innerText = 'CAMERA STREAM LOST';
+                if (this.dom.calStatusIcon) this.dom.calStatusIcon.innerText = '⚠️';
+                this.dom.calStatusBadge.className = 'cal-status-badge error';
+                if (this.dom.calSubtext) this.dom.calSubtext.innerText = 'Camera stream was disconnected. Click Try Again.';
+                this.showCameraError('CameraLost');
+                this.updateStepIndicator(0);
+                return;
+            case 'VIDEO_WAITING':
+                this.dom.calStatusText.innerText = 'WAITING FOR VIDEO';
+                if (this.dom.calStatusIcon) this.dom.calStatusIcon.innerText = '⏳';
+                this.dom.calStatusBadge.className = 'cal-status-badge';
+                if (this.dom.calSubtext) this.dom.calSubtext.innerText = 'Receiving video stream from camera hardware...';
+                this.updateStepIndicator(1);
+                return;
+            case 'VIDEO_TIMEOUT':
+                this.dom.calStatusText.innerText = 'VIDEO INITIALIZATION TIMED OUT';
+                if (this.dom.calStatusIcon) this.dom.calStatusIcon.innerText = '⚠️';
+                this.dom.calStatusBadge.className = 'cal-status-badge error';
+                if (this.dom.calSubtext) this.dom.calSubtext.innerText = 'Camera stream connected but video frames timed out. Click Try Again.';
+                this.showCameraError('VideoTimeout');
+                this.updateStepIndicator(0);
+                return;
+            case 'MODEL_LOADING':
+                this.dom.calStatusText.innerText = 'LOADING FACE TRACKER';
+                if (this.dom.calStatusIcon) this.dom.calStatusIcon.innerText = '⏳';
+                this.dom.calStatusBadge.className = 'cal-status-badge';
+                if (this.dom.calSubtext) this.dom.calSubtext.innerText = 'Loading MediaPipe facial landmark neural network...';
+                this.updateStepIndicator(1);
+                return;
+            case 'MODEL_ERROR':
+                this.dom.calStatusText.innerText = 'MODEL LOAD FAILED';
+                if (this.dom.calStatusIcon) this.dom.calStatusIcon.innerText = '⚠️';
+                this.dom.calStatusBadge.className = 'cal-status-badge error';
+                if (this.dom.calSubtext) this.dom.calSubtext.innerText = 'Failed to load face tracking neural network. Check network and click Try Again.';
+                this.showCameraError('ModelError');
+                this.updateStepIndicator(0);
+                return;
+            case 'INFERENCE_ERROR':
+                this.dom.calStatusText.innerText = 'INFERENCE FAILED';
+                if (this.dom.calStatusIcon) this.dom.calStatusIcon.innerText = '⚠️';
+                this.dom.calStatusBadge.className = 'cal-status-badge error';
+                if (this.dom.calSubtext) this.dom.calSubtext.innerText = 'Vision inference encountered a runtime error. Click Try Again.';
+                this.showCameraError('InferenceError');
+                this.updateStepIndicator(1);
+                return;
+        }
+
         const stage = progress ? progress.stage : 'WAITING';
 
         if (stage === 'ERROR') {
-            label = progress.stageLabel || 'CAMERA ERROR';
+            label = progress.stageLabel || 'CAMERA ACCESS REQUIRED';
             hint = 'Camera access is required for tracking.';
             icon = '✕';
             badgeClass = 'cal-status-badge error';
@@ -794,34 +868,92 @@ export class UIManager {
             if (this.dom.calSuccessCard) this.dom.calSuccessCard.style.display = 'none';
             if (this.dom.btnCalStartMatch) this.dom.btnCalStartMatch.style.display = 'none';
         } else if (stage === 'IDENTITY') {
-            label = 'IDENTITY CAPTURE';
-            hint = progress.samples !== undefined
-                ? `GOOD SAMPLES: ${progress.samples} / ${progress.required || 24}`
-                : 'Look directly at the camera. Capturing biometric profile...';
-            icon = '⚡';
-            badgeClass = 'cal-status-badge tracking';
-            guideModifier = 'tracking';
+            const reason = progress.rejectionReason;
+            const accepted = progress.samples || 0;
+            const req = progress.required || 24;
+
+            if (reason) {
+                label = reason;
+                if (reason.includes('MULTIPLE FACES')) {
+                    icon = '👥';
+                    badgeClass = 'cal-status-badge warning';
+                    guideModifier = 'tracking';
+                    hint = 'Center yourself in the guide or ask background persons to step back';
+                } else if (reason.includes('CLOSER')) {
+                    icon = '🔍';
+                    badgeClass = 'cal-status-badge warning';
+                    guideModifier = 'tracking';
+                    hint = `Move closer to fill the oval guide (${accepted} / ${req} samples)`;
+                } else if (reason.includes('BACK')) {
+                    icon = '↔️';
+                    badgeClass = 'cal-status-badge warning';
+                    guideModifier = 'tracking';
+                    hint = `Step or lean slightly back (${accepted} / ${req} samples)`;
+                } else if (reason.includes('LEFT') || reason.includes('RIGHT') || reason.includes('UP') || reason.includes('DOWN')) {
+                    icon = '📍';
+                    badgeClass = 'cal-status-badge warning';
+                    guideModifier = 'tracking';
+                    hint = `Center your face in the oval (${accepted} / ${req} samples)`;
+                } else if (reason.includes('LIGHT') || reason.includes('DARK') || reason.includes('GLARE')) {
+                    icon = '💡';
+                    badgeClass = 'cal-status-badge warning';
+                    guideModifier = 'tracking';
+                    hint = reason;
+                } else if (reason.includes('LEVEL') || reason.includes('STRAIGHT') || reason.includes('AHEAD')) {
+                    icon = '📐';
+                    badgeClass = 'cal-status-badge warning';
+                    guideModifier = 'tracking';
+                    hint = `Look directly forward at the camera (${accepted} / ${req} samples)`;
+                } else if (reason.includes('STILL')) {
+                    icon = '🎯';
+                    badgeClass = 'cal-status-badge ok';
+                    guideModifier = 'aligned';
+                    hint = `Hold still to collect samples (${accepted} / ${req})`;
+                } else if (reason.includes('NOT DETECTED')) {
+                    icon = '○';
+                    badgeClass = 'cal-status-badge';
+                    guideModifier = '';
+                    hint = 'Position your face inside the framing guide';
+                } else {
+                    icon = '○';
+                    badgeClass = 'cal-status-badge';
+                    guideModifier = '';
+                    hint = reason;
+                }
+            } else {
+                label = 'FACE ALIGNED ✓';
+                icon = '✓';
+                badgeClass = 'cal-status-badge ok';
+                guideModifier = 'aligned';
+                hint = `CAPTURING SAMPLES: ${accepted} / ${req} — HOLD STILL`;
+            }
             this.updateStepIndicator(1);
         } else if (stage === 'HEAD_POSE' || stage === 'CALIBRATING') {
-            label = trackingMode === 'head' ? 'HEAD CONTROL CALIBRATION' : 'BODY STANCE CALIBRATION';
-            hint = progress.samples !== undefined
-                ? `NEUTRAL SAMPLES: ${progress.samples} / ${progress.required || 24}`
-                : 'Sit naturally. Look straight ahead. Hold still.';
+            label = trackingMode === 'head' ? 'CALIBRATING NEUTRAL HEAD POSE' : 'CALIBRATING BODY STANCE';
+            const accepted = progress.samples || 0;
+            const req = progress.required || 24;
+            hint = `SAMPLES: ${accepted} / ${req} — Sit naturally and look straight ahead.`;
             icon = '🎯';
             badgeClass = 'cal-status-badge ok';
             guideModifier = 'aligned calibrating';
             this.updateStepIndicator(2);
         } else if (stage === 'LOCKED') {
-            label = 'PLAYER LOCKED ✓';
-            hint = 'Neutral posture saved. Other faces will be ignored.';
+            label = 'PLAYER 1 READY ✓';
+            hint = 'Neutral posture calibrated. Primary player locked.';
             icon = '✓';
             badgeClass = 'cal-status-badge success';
             guideModifier = 'complete';
             this.updateStepIndicator(3);
         } else {
             this.updateStepIndicator(1);
-            // Pre-enrollment positioning feedback
             switch (positionStatus) {
+                case 'MULTIPLE_FACES':
+                    label = 'MULTIPLE FACES DETECTED';
+                    icon = '👥';
+                    badgeClass = 'cal-status-badge warning';
+                    guideModifier = 'tracking';
+                    hint = 'Center yourself in the guide or ask background persons to step back';
+                    break;
                 case 'MOVE_CLOSER':
                     label = 'MOVE CLOSER';
                     icon = '🔍';
@@ -850,6 +982,48 @@ export class UIManager {
                     guideModifier = 'tracking';
                     hint = 'Center yourself in the guide';
                     break;
+                case 'LEVEL_HEAD':
+                    label = 'LEVEL YOUR HEAD';
+                    icon = '⚖️';
+                    badgeClass = 'cal-status-badge warning';
+                    guideModifier = 'tracking';
+                    hint = 'Keep your head level with shoulders';
+                    break;
+                case 'LOOK_STRAIGHT':
+                    label = 'LOOK STRAIGHT AT CAMERA';
+                    icon = '👀';
+                    badgeClass = 'cal-status-badge warning';
+                    guideModifier = 'tracking';
+                    hint = 'Turn face directly towards camera lens';
+                    break;
+                case 'LOOK_AHEAD':
+                    label = 'LOOK STRAIGHT AHEAD';
+                    icon = '👀';
+                    badgeClass = 'cal-status-badge warning';
+                    guideModifier = 'tracking';
+                    hint = 'Tilt face to look directly straight';
+                    break;
+                case 'STEADY_HEAD':
+                    label = 'HOLD STILL';
+                    icon = '⏳';
+                    badgeClass = 'cal-status-badge warning';
+                    guideModifier = 'tracking';
+                    hint = 'Keep head steady to capture baseline';
+                    break;
+                case 'IMPROVE_LIGHTING':
+                    label = 'IMPROVE LIGHTING';
+                    icon = '💡';
+                    badgeClass = 'cal-status-badge warning';
+                    guideModifier = 'tracking';
+                    hint = 'Room is too dim for tracking. Turn on room lights';
+                    break;
+                case 'FACE_TOO_DARK':
+                    label = 'FACE TOO DARK (BACKLIT)';
+                    icon = '☀️';
+                    badgeClass = 'cal-status-badge warning';
+                    guideModifier = 'tracking';
+                    hint = 'Bright light behind you. Turn to face light source';
+                    break;
                 case 'FULL_BODY_REQUIRED':
                     label = 'FULL BODY REQUIRED';
                     icon = '↔️';
@@ -859,8 +1033,9 @@ export class UIManager {
                     break;
                 case 'NO_BODY':
                 case 'NO_FACE':
+                case 'SEARCHING_FOR_FACE':
                 default:
-                    label = trackingMode === 'head' ? 'FINDING FACE...' : 'FINDING BODY...';
+                    label = trackingMode === 'head' ? 'SEARCHING FOR FACE' : 'SEARCHING FOR BODY';
                     icon = '○';
                     badgeClass = 'cal-status-badge';
                     guideModifier = '';
@@ -945,12 +1120,21 @@ export class UIManager {
         const title = this.dom.calFallbackTitle || document.getElementById('cal-fallback-title');
         const desc = this.dom.calFallbackDesc || document.getElementById('cal-fallback-desc');
 
-        if (errorType === 'NotAllowedError') {
-            if (title) title.innerText = 'CAMERA ACCESS REQUIRED';
-            if (desc) desc.innerText = 'Allow camera access to continue.';
+        if (errorType === 'NotAllowedError' || errorType === 'PermissionDeniedError') {
+            if (title) title.innerText = 'CAMERA ACCESS DENIED';
+            if (desc) desc.innerText = 'Camera access was blocked by your browser. Please allow camera permissions to continue.';
+        } else if (errorType === 'VideoTimeout') {
+            if (title) title.innerText = 'VIDEO INITIALIZATION TIMED OUT';
+            if (desc) desc.innerText = 'Webcam connected, but video frames timed out before becoming ready. Click TRY AGAIN to reconnect.';
+        } else if (errorType === 'ModelError' || errorType === 'ModelLoadFailed') {
+            if (title) title.innerText = 'MODEL LOAD FAILED';
+            if (desc) desc.innerText = 'Face tracking model assets could not be loaded. Check your internet connection or click TRY AGAIN.';
+        } else if (errorType === 'InferenceError') {
+            if (title) title.innerText = 'INFERENCE FAILED';
+            if (desc) desc.innerText = 'Face tracking inference encountered a runtime error. Click TRY AGAIN to restart tracking.';
         } else {
             if (title) title.innerText = 'CAMERA UNAVAILABLE';
-            if (desc) desc.innerText = 'No camera device detected. Allow camera access or use keyboard.';
+            if (desc) desc.innerText = 'No camera device detected or camera in use. Check your webcam or use keyboard.';
         }
 
         this.dom.calCameraFallback.style.display = 'flex';
@@ -963,10 +1147,20 @@ export class UIManager {
         if (this.dom.calStatusBadge && this.dom.calStatusText) {
             this.dom.calStatusBadge.className = 'cal-status-badge error';
             if (this.dom.calStatusIcon) this.dom.calStatusIcon.innerText = '✕';
-            this.dom.calStatusText.innerText = 'CAMERA UNAVAILABLE';
+            if (errorType === 'NotAllowedError' || errorType === 'PermissionDeniedError') {
+                this.dom.calStatusText.innerText = 'CAMERA ACCESS DENIED';
+            } else if (errorType === 'VideoTimeout') {
+                this.dom.calStatusText.innerText = 'VIDEO INITIALIZATION TIMED OUT';
+            } else if (errorType === 'ModelError' || errorType === 'ModelLoadFailed') {
+                this.dom.calStatusText.innerText = 'MODEL LOAD FAILED';
+            } else if (errorType === 'InferenceError') {
+                this.dom.calStatusText.innerText = 'INFERENCE FAILED';
+            } else {
+                this.dom.calStatusText.innerText = 'CAMERA UNAVAILABLE';
+            }
         }
         if (this.dom.calSubtext) {
-            this.dom.calSubtext.innerText = 'Camera access is required for tracking.';
+            this.dom.calSubtext.innerText = 'Startup failed. Click TRY AGAIN to retry or USE KEYBOARD to play.';
         }
         this.updateStepIndicator(0);
     }
@@ -1327,11 +1521,11 @@ export class UIManager {
         overlay.style.display = isHidden ? 'block' : 'none';
     }
 
-    // Complete Developer Telemetry Overlay (Phase 37)
+    // Complete Developer Vision Telemetry Overlay (Phase 18 & 41)
     updateDebugStats(stats) {
         if (!this.dom.debugOverlay || this.dom.debugOverlay.style.display === 'none') return;
 
-        // FPS calculation
+        // Render FPS calculation
         this.frameCount++;
         const now = performance.now();
         if (now - this.lastFpsUpdate >= 500) {
@@ -1345,18 +1539,39 @@ export class UIManager {
             if (el) el.innerText = val;
         };
 
-        setField('dbg-player-id', stats.playerId || 'PLAYER 1');
-        setField('dbg-face-count', `${stats.faceCount || 1} (${stats.ignoredFaces || 0} IGNORED)`);
-        setField('dbg-match-score', stats.matchScore || '100%');
+        setField('dbg-cam-status', stats.cameraState || 'IDLE');
+        setField('dbg-diag-stage', stats.diagnosticStage || 'UNKNOWN');
+        setField('dbg-video-elem', stats.activeVideoId || 'NONE');
+        setField('dbg-cam-res', stats.hardwareRes || '—');
+        setField('dbg-frame-age', stats.frameAge || '0 ms');
+        setField('dbg-model-state', stats.modelState || 'NOT READY');
+        setField('dbg-render-fps', `${this.currentFps} FPS`);
+        setField('dbg-inference-fps', stats.inferenceFps || '0 FPS');
+        setField('dbg-inference-dur', stats.inferenceDuration || '0 ms');
+        setField('dbg-lighting', stats.lighting || 'NORMAL');
+        setField('dbg-player-id', stats.playerId || 'SEARCHING');
+        setField('dbg-face-count', `${stats.faceCount || 0} (${stats.ignoredFaces || 0} CROWD)`);
+        setField('dbg-face-conf', stats.detectionConf || '0%');
+        setField('dbg-landmark-valid', stats.landmarkValid || 'INVALID');
+        setField('dbg-accepted-samples', `${stats.acceptedSamples || 0} / 24`);
+        setField('dbg-rejected-samples', stats.rejectedSamples !== undefined ? String(stats.rejectedSamples) : '0');
+        setField('dbg-rejection-reason', stats.lastRejection || 'NONE');
         setField('dbg-raw', `${stats.rawRoll || 0}°`);
-        setField('dbg-smoothed', `${stats.smoothedRoll || 0}°`);
         setField('dbg-neutral', `${stats.neutralRoll || 0}°`);
-        setField('dbg-pitch', `${stats.rawPitch || 0}`);
-        setField('dbg-pitchvel', `${stats.pitchVel || 0}`);
-        setField('dbg-aim', stats.aim || '0.00');
-        setField('dbg-locked-aim', stats.lockedAim || '0.00');
+        setField('dbg-smoothed', `${stats.relativeRoll || stats.smoothedRoll || 0}°`);
+        setField('dbg-pitch', `${stats.rawPitch || 0} / ${stats.pitchVel || 0}`);
+        setField('dbg-neutral-pitch', `${stats.neutralPitch || 0}°`);
+        setField('dbg-relative-pitch', `${stats.relativePitch || 0}°`);
+        setField('dbg-aim', stats.aim || 'CENTER (0.00)');
         setField('dbg-power', `${stats.power || 0}%`);
-        setField('dbg-status', stats.status || 'OK');
-        setField('dbg-fps', `${this.currentFps} FPS`);
+        setField('dbg-nod-state', stats.nodState || 'READY');
+        setField('dbg-status', stats.status || 'NO FACE');
+        setField('dbg-cal-state', stats.calibrationState || 'IDLE');
+
+        const errEl = document.getElementById('dbg-error');
+        if (errEl) {
+            errEl.innerText = stats.lastError || 'NONE';
+            errEl.style.color = (stats.lastError && stats.lastError !== 'NONE') ? '#ff5252' : '#00e676';
+        }
     }
 }
